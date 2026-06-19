@@ -69,7 +69,7 @@ You can create additional features from this dataset:
 | --- | --- | --- |
 | `bytes_per_packet` | `src_bytes / packet_count` | Measures average packet payload size. Useful for identifying anomalous data volume configurations. |
 | `total_bytes` | `src_bytes + dst_bytes` | Measures total bidirectional data volume of the connection. |
-| `troughput` | `(src_bytes + dst_bytes) / duration` | Measures transmission speed in bytes per second. Highly effective for identifying DDoS flood attacks. |
+| `throughput` | `(src_bytes + dst_bytes) / duration` | Measures transmission speed in bytes per second. Highly effective for identifying DDoS flood attacks. |
 | `is_attack` | `attack_type != 'Normal'` | Simplifies the target column into binary classification (Normal vs. Attack). |
 
 ### Bahasa Indonesia
@@ -80,7 +80,7 @@ Kamu bisa membuat fitur tambahan dari dataset ini:
 | --- | --- | --- |
 | `bytes_per_packet` | `src_bytes / packet_count` | Mengukur ukuran rata-rata paket data. Berguna untuk mengidentifikasi pola volume payload yang janggal. |
 | `total_bytes` | `src_bytes + dst_bytes` | Mengukur total volume data dua arah dalam koneksi jaringan. |
-| `troughput` | `(src_bytes + dst_bytes) / duration` | Mengukur kecepatan transfer data dalam byte per detik. Sangat efektif untuk mengidentifikasi serangan banjir DDoS. |
+| `throughput` | `(src_bytes + dst_bytes) / duration` | Mengukur kecepatan transfer data dalam byte per detik. Sangat efektif untuk mengidentifikasi serangan banjir DDoS. |
 | `is_attack` | `attack_type != 'Normal'` | Menyederhanakan label target menjadi klasifikasi biner (Normal vs. Serangan). |
 
 ## Important Notes
