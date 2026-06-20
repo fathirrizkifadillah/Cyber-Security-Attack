@@ -146,9 +146,10 @@ def load_dataset():
     path = r"C:\Users\FATHIR\.cache\kagglehub\datasets\juanschafle\cyber-attack-detection-using-network-traffic\versions\1"
     csv_file = os.path.join(path, 'cyber_attack_dataset_100000.csv')
     df = pd.read_csv(csv_file)
-    df['throughput'] = ((df['src_bytes'] + df['dst_bytes']) / df['duration'])
-    df['bytes_per_packet'] = df['src_bytes'] / df['packet_count']
-    df['asymmetry_ratio'] = df['src_bytes'] / (df['src_bytes'] + df['dst_bytes'])
+    # Prevent division by zero for derived features
+    df['throughput'] = (df['src_bytes'] + df['dst_bytes']) / df['duration'].replace(0, 0.001)
+    df['bytes_per_packet'] = df['src_bytes'] / df['packet_count'].replace(0, 1)
+    df['asymmetry_ratio'] = df['src_bytes'] / (df['src_bytes'] + df['dst_bytes']).replace(0, 1)
     return df
 
 try:
@@ -184,9 +185,9 @@ else:
         protocol = st.sidebar.selectbox("Protocol", options=["TCP", "UDP"])
         failed_logins = st.sidebar.slider("Failed Logins", min_value=0, max_value=10, value=0)
         
-        throughput = (src_bytes + dst_bytes) / duration
-        bytes_per_packet = src_bytes / packet_count
-        asymmetry_ratio = src_bytes / (src_bytes + dst_bytes)
+        throughput = (src_bytes + dst_bytes) / max(duration, 0.001)
+        bytes_per_packet = src_bytes / max(packet_count, 1)
+        asymmetry_ratio = src_bytes / max(src_bytes + dst_bytes, 1)
         protocol_num = 1 if protocol == "TCP" else 0
         
         input_data = pd.DataFrame([{
@@ -320,7 +321,7 @@ else:
                     ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height),
                                 ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
                                 
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
             st.markdown("""
             <div style="background-color: #1e293b; border-radius: 12px; padding: 16px; border: 1px solid #334155; margin-top: 20px;">
@@ -366,7 +367,7 @@ else:
                 ax.set_title(f'{col.replace("_", " ").title()}', color='#f8fafc', fontweight='bold')
                 ax.set_xlabel(col, color='#94a3b8')
                 ax.set_ylabel('Count', color='#94a3b8')
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             st.markdown("""
             * Numeric variables (`src_bytes`, `dst_bytes`, and `packet_count`) show a similar distribution pattern, namely **positively skewed (right-skewed)** with a mean value that is consistently higher than the median.
             * This indicates that most of the connections in the dataset have relatively low to moderate network activity, while there are a small number of connections with very high values that form the long tail of the distribution.
@@ -386,7 +387,7 @@ else:
                 ax.set_title(f'Distribution of {col.replace("_", " ").title()} by Attack Type', color='#f8fafc', fontweight='bold')
                 ax.set_xlabel(col, color='#94a3b8')
                 ax.set_ylabel('Density', color='#94a3b8')
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         elif eda_view == "3. Attack Types by Network Protocol":
             st.write("#### Distribution of Attack Types by Network Protocol")
@@ -405,7 +406,7 @@ else:
                 if height > 0:
                     ax.annotate(f'{height:,.0f}', (p.get_x() + p.get_width() / 2., height),
                                 ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         elif eda_view == "4. Multivariate Pairplot by Attack Type":
             st.write("#### Multivariate Pairplot by Attack Type")
@@ -462,7 +463,7 @@ else:
                 if height > 0:
                     axes[1].annotate(f'{height:.1f}%', (x + width/2, y + height/2), 
                                      ha='center', va='center', color='white', fontweight='bold', fontsize=9)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         elif eda_view == "6. Correlation Heatmap":
             st.write("#### Correlation Heatmap of Numerical Features")
@@ -473,7 +474,7 @@ else:
             sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5, ax=ax)
             ax.tick_params(colors='#94a3b8')
             ax.set_title('Correlation Heatmap', color='#f8fafc', fontweight='bold')
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         elif eda_view == "7. Throughput by Attack Type":
             st.write("#### Throughput by Attack Type")
@@ -493,7 +494,7 @@ else:
                 if height > 0:
                     ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height * 1.15),
                                 ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         elif eda_view == "8. Average Packet Size by Attack Type":
             st.write("#### Average Packet Size by Attack Type")
@@ -512,7 +513,7 @@ else:
                 if height > 0:
                     ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height + 1),
                                 ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
             
         else:
             st.write("#### Data Asymmetry Ratio by Attack Type")
@@ -531,7 +532,7 @@ else:
                 if height > 0:
                     ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height + 0.02),
                                 ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
 
     with tab_model:
         st.subheader("Model Training & Evaluation Results")
