@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Network Intrusion Detection Dashboard",
@@ -172,6 +172,12 @@ else:
         'PortScan': {'throughput': 113.20, 'packet_size': 1.98, 'asymmetry': 0.69},
         'BruteForce': {'throughput': 38.36, 'packet_size': 14.19, 'asymmetry': 0.65}
     }
+    attack_colors = {
+        'Normal': '#10b981',
+        'DDoS': '#ef4444',
+        'PortScan': '#0ea5e9',
+        'BruteForce': '#f59f0b'
+    }
 
     tab_pred, tab_eda, tab_model = st.tabs(["Prediction Classifier", "Exploratory Data Analysis", "Model Evaluation"])
 
@@ -242,6 +248,44 @@ else:
                     <p style="color: #94a3b8; margin: 0; font-size: 15px;">Repeated failed authentication attempts detected.</p>
                 </div>
                 """, unsafe_allow_html=True)
+            
+            # Threat Severity Index (Gauge Chart)
+            risk_scores = {
+                'Normal': 10,
+                'PortScan': 45,
+                'BruteForce': 75,
+                'DDoS': 95
+            }
+            risk_val = risk_scores.get(pred_label, 0)
+            risk_color = attack_colors.get(pred_label, '#94a3b8')
+            
+            fig_gauge = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=risk_val,
+                domain={'x': [0, 1], 'y': [0, 1]},
+                title={'text': "Threat Severity Index", 'font': {'color': '#f8fafc', 'size': 14, 'family': 'Inter'}},
+                number={'font': {'color': risk_color, 'size': 32, 'family': 'Inter'}, 'suffix': '%'},
+                gauge={
+                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': '#334155', 'tickfont': {'color': '#94a3b8'}},
+                    'bar': {'color': risk_color},
+                    'bgcolor': '#1e293b',
+                    'borderwidth': 1,
+                    'bordercolor': '#334155',
+                    'steps': [
+                        {'range': [0, 30], 'color': 'rgba(16, 185, 129, 0.15)'},
+                        {'range': [30, 60], 'color': 'rgba(14, 165, 233, 0.15)'},
+                        {'range': [60, 85], 'color': 'rgba(245, 158, 11, 0.15)'},
+                        {'range': [85, 100], 'color': 'rgba(239, 68, 68, 0.15)'}
+                    ]
+                }
+            ))
+            fig_gauge.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=180,
+                margin=dict(l=10, r=10, t=30, b=10)
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True)
                 
             st.subheader("Derived Features")
             st.markdown(f"""
@@ -263,11 +307,46 @@ else:
             
             st.markdown("<br>", unsafe_allow_html=True)
             st.subheader("Prediction Confidence")
+            
             probs_df = pd.DataFrame({
                 'Attack Type': le.classes_,
                 'Probability': pred_probs
             })
-            st.bar_chart(data=probs_df, x='Attack Type', y='Probability', use_container_width=True)
+            
+            fig_probs = px.bar(
+                probs_df,
+                x='Attack Type',
+                y='Probability',
+                color='Attack Type',
+                color_discrete_map=attack_colors,
+                text='Probability'
+            )
+            
+            fig_probs.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                showlegend=False,
+                height=300,
+                xaxis=dict(
+                    title="",
+                    tickfont=dict(color='#94a3b8', size=11),
+                    gridcolor='#1e293b'
+                ),
+                yaxis=dict(
+                    title=dict(text="Probability", font=dict(color='#94a3b8', size=11)),
+                    tickfont=dict(color='#94a3b8', size=11),
+                    gridcolor='#1e293b',
+                    range=[0, 1.05]
+                ),
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            fig_probs.update_traces(
+                texttemplate='%{y:.1%}',
+                textposition='outside',
+                cliponaxis=False
+            )
+            st.plotly_chart(fig_probs, use_container_width=True)
 
         with col2:
             st.subheader("Current Session vs. Attack Profiles")
@@ -277,51 +356,72 @@ else:
                 options=["Throughput (Bytes/Second)", "Average Packet Size (Bytes)", "Data Asymmetry Ratio"]
             )
             
-            plt.style.use('dark_background')
-            fig, ax = plt.subplots(figsize=(8, 5))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            ax.grid(True, color='#334155', linestyle='--')
-            
             compare_data = []
             
             if metric_to_compare == "Throughput (Bytes/Second)":
                 for label, vals in class_averages.items():
                     compare_data.append({'Type': label, 'Value': vals['throughput'], 'Source': 'Dataset Average'})
                 compare_data.append({'Type': 'Current Input', 'Value': throughput, 'Source': 'Current Input'})
-                palette = {'Dataset Average': '#475569', 'Current Input': '#38bdf8'}
                 y_label = "Throughput (B/s)"
+                log_scale = True
             elif metric_to_compare == "Average Packet Size (Bytes)":
                 for label, vals in class_averages.items():
                     compare_data.append({'Type': label, 'Value': vals['packet_size'], 'Source': 'Dataset Average'})
                 compare_data.append({'Type': 'Current Input', 'Value': bytes_per_packet, 'Source': 'Current Input'})
-                palette = {'Dataset Average': '#475569', 'Current Input': '#38bdf8'}
                 y_label = "Bytes / Packet"
+                log_scale = False
             else:
                 for label, vals in class_averages.items():
                     compare_data.append({'Type': label, 'Value': vals['asymmetry'], 'Source': 'Dataset Average'})
                 compare_data.append({'Type': 'Current Input', 'Value': asymmetry_ratio, 'Source': 'Current Input'})
-                palette = {'Dataset Average': '#475569', 'Current Input': '#38bdf8'}
                 y_label = "Asymmetry Ratio"
+                log_scale = False
                 
             compare_df = pd.DataFrame(compare_data)
-            sns.barplot(data=compare_df, x='Type', y='Value', hue='Source', palette=palette, errorbar=None, ax=ax)
             
-            if metric_to_compare == "Throughput (Bytes/Second)":
-                ax.set_yscale('log')
-                
-            ax.set_xlabel("Connection Type", color='#94a3b8')
-            ax.set_ylabel(y_label, color='#94a3b8')
-            ax.tick_params(colors='#94a3b8')
-            ax.set_title(f"Comparison of {metric_to_compare}", color='#f8fafc', fontweight='bold')
+            fig_comp = px.bar(
+                compare_df,
+                x='Type',
+                y='Value',
+                color='Source',
+                barmode='group',
+                color_discrete_map={'Dataset Average': '#475569', 'Current Input': '#38bdf8'},
+                text='Value'
+            )
             
-            for p in ax.patches:
-                height = p.get_height()
-                if height > 0:
-                    ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height),
-                                ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-                                
-            st.pyplot(fig, use_container_width=True)
+            fig_comp.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                height=350,
+                xaxis=dict(
+                    title=dict(text="Connection Type", font=dict(color='#94a3b8', size=11)),
+                    tickfont=dict(color='#94a3b8', size=11),
+                    gridcolor='#1e293b'
+                ),
+                yaxis=dict(
+                    title=dict(text=y_label, font=dict(color='#94a3b8', size=11)),
+                    tickfont=dict(color='#94a3b8', size=11),
+                    gridcolor='#1e293b',
+                    type='log' if log_scale else 'linear'
+                ),
+                legend=dict(
+                    title="",
+                    font=dict(color='#94a3b8', size=10),
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                ),
+                margin=dict(l=10, r=10, t=10, b=10)
+            )
+            fig_comp.update_traces(
+                texttemplate='%{y:.2f}',
+                textposition='outside',
+                cliponaxis=False
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
             
             st.markdown("""
             <div style="background-color: #1e293b; border-radius: 12px; padding: 16px; border: 1px solid #334155; margin-top: 20px;">
@@ -352,22 +452,29 @@ else:
             ]
         )
         
-        plt.style.use('dark_background')
-        
         if eda_view == "1. Distribution of Numerical Variables":
             st.write("#### Distribution Analysis of Numerical Variables")
-            target_columns = ['src_bytes', 'dst_bytes', 'packet_count']
-            fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 10))
-            fig.patch.set_facecolor('#1e293b')
-            for ax, col in zip(axes, target_columns):
-                ax.patch.set_facecolor('#1e293b')
-                ax.grid(True, color='#334155', linestyle='--')
-                sns.histplot(data=df_raw, x=col, bins=50, kde=True, ax=ax)
-                ax.tick_params(colors='#94a3b8')
-                ax.set_title(f'{col.replace("_", " ").title()}', color='#f8fafc', fontweight='bold')
-                ax.set_xlabel(col, color='#94a3b8')
-                ax.set_ylabel('Count', color='#94a3b8')
-            st.pyplot(fig, use_container_width=True)
+            selected_var = st.selectbox("Select Variable to Plot Distribution", options=['src_bytes', 'dst_bytes', 'packet_count', 'duration'])
+            
+            fig = px.histogram(
+                df_raw, 
+                x=selected_var, 
+                nbins=50, 
+                marginal="box",
+                title=f"Distribution of {selected_var.replace('_', ' ').title()}",
+                color_discrete_sequence=['#38bdf8']
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                xaxis=dict(gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                yaxis=dict(gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                title_font=dict(size=14, color='#f8fafc')
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
             st.markdown("""
             * Numeric variables (`src_bytes`, `dst_bytes`, and `packet_count`) show a similar distribution pattern, namely **positively skewed (right-skewed)** with a mean value that is consistently higher than the median.
             * This indicates that most of the connections in the dataset have relatively low to moderate network activity, while there are a small number of connections with very high values that form the long tail of the distribution.
@@ -375,38 +482,52 @@ else:
             
         elif eda_view == "2. Distribution of Variables by Attack Type":
             st.write("#### Distribution of Numerical Variables by Attack Type")
-            target_columns = ['src_bytes', 'dst_bytes', 'packet_count']
-            fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(10, 12))
-            fig.patch.set_facecolor('#1e293b')
-            palette = {'Normal': '#10b981', 'DDoS': '#ef4444', 'PortScan': '#0ea5e9', 'BruteForce': '#f59f0b'}
-            for ax, col in zip(axes, target_columns):
-                ax.patch.set_facecolor('#1e293b')
-                ax.grid(True, color='#334155', linestyle='--')
-                sns.kdeplot(data=df_raw, x=col, hue='attack_type', fill=True, common_norm=False, palette=palette, alpha=0.4, linewidth=2, ax=ax)
-                ax.tick_params(colors='#94a3b8')
-                ax.set_title(f'Distribution of {col.replace("_", " ").title()} by Attack Type', color='#f8fafc', fontweight='bold')
-                ax.set_xlabel(col, color='#94a3b8')
-                ax.set_ylabel('Density', color='#94a3b8')
-            st.pyplot(fig, use_container_width=True)
+            selected_var = st.selectbox("Select Variable for Distribution Comparison", options=['src_bytes', 'dst_bytes', 'packet_count', 'duration'])
+            
+            fig = px.violin(
+                df_raw, 
+                y=selected_var, 
+                x='attack_type', 
+                color='attack_type',
+                box=True, 
+                points=False,
+                color_discrete_map=attack_colors,
+                title=f"Comparison of {selected_var.replace('_', ' ').title()} by Attack Type"
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                showlegend=False,
+                xaxis=dict(title="", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                yaxis=dict(gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                title_font=dict(size=14, color='#f8fafc')
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
         elif eda_view == "3. Attack Types by Network Protocol":
             st.write("#### Distribution of Attack Types by Network Protocol")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            ax.grid(True, color='#334155', linestyle='--')
-            palette = {'TCP': '#475569', 'UDP': '#cbd5e1'}
-            sns.countplot(data=df_raw, x='attack_type', hue='protocol', palette=palette, edgecolor='black', alpha=0.9, ax=ax)
-            ax.tick_params(colors='#94a3b8')
-            ax.set_xlabel('Attack Type', color='#94a3b8')
-            ax.set_ylabel('Number of Connections', color='#94a3b8')
-            ax.set_title('Distribution of Attack Types by Network Protocol', color='#f8fafc', fontweight='bold')
-            for p in ax.patches:
-                height = p.get_height()
-                if height > 0:
-                    ax.annotate(f'{height:,.0f}', (p.get_x() + p.get_width() / 2., height),
-                                ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig, use_container_width=True)
+            
+            fig = px.histogram(
+                df_raw, 
+                x='attack_type', 
+                color='protocol', 
+                barmode='group',
+                color_discrete_map={'TCP': '#38bdf8', 'UDP': '#f59f0b'},
+                text_auto='.0f',
+                title="Attack Types by Network Protocol"
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                xaxis=dict(title="Attack Type", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                yaxis=dict(title="Number of Connections", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                title_font=dict(size=14, color='#f8fafc')
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
         elif eda_view == "4. Multivariate Pairplot by Attack Type":
             st.write("#### Multivariate Pairplot by Attack Type")
@@ -427,130 +548,208 @@ else:
             
         elif eda_view == "5. Protocol Traffic & Attack Comparison":
             st.write("#### Traffic and Attack Comparison by Protocol")
-            protocol_counts = pd.crosstab(df_raw['protocol'], df_raw['attack_type'])
-            protocol_pct = pd.crosstab(df_raw['protocol'], df_raw['attack_type'], normalize='index') * 100
-            colors = sns.color_palette('Set2', len(df_raw['attack_type'].unique()))
             
-            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15, 6))
-            fig.patch.set_facecolor('#1e293b')
-            for ax in axes:
-                ax.patch.set_facecolor('#1e293b')
-                ax.grid(True, color='#334155', linestyle='--')
-                ax.tick_params(colors='#94a3b8')
+            protocol_counts = pd.crosstab(df_raw['protocol'], df_raw['attack_type']).reset_index()
+            protocol_counts_melted = protocol_counts.melt(id_vars='protocol', var_name='Attack Type', value_name='Count')
+            
+            total_by_proto = protocol_counts_melted.groupby('protocol')['Count'].transform('sum')
+            protocol_counts_melted['Percentage'] = (protocol_counts_melted['Count'] / total_by_proto) * 100
+            
+            col_abs, col_rel = st.columns(2)
+            
+            with col_abs:
+                fig_abs = px.bar(
+                    protocol_counts_melted, 
+                    x='protocol', 
+                    y='Count', 
+                    color='Attack Type',
+                    color_discrete_map=attack_colors,
+                    title="Absolute Traffic and Attack Counts",
+                    text_auto='.0f'
+                )
+                fig_abs.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#f8fafc',
+                    xaxis=dict(title="Protocol", tickfont=dict(color='#94a3b8')),
+                    yaxis=dict(title="Number of Connections", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                    legend=dict(font=dict(color='#94a3b8'))
+                )
+                st.plotly_chart(fig_abs, use_container_width=True)
                 
-            protocol_counts.plot(kind='bar', stacked=True, color=colors, ax=axes[0])
-            axes[0].set_title('Absolute Traffic and Attack Counts', color='#f8fafc', fontweight='bold')
-            axes[0].set_xlabel('Protocol', color='#94a3b8')
-            axes[0].set_ylabel('Number of Connections', color='#94a3b8')
-            axes[0].set_xticklabels(protocol_counts.index, rotation=0)
-            axes[0].get_legend().remove()
-            for p in axes[0].patches:
-                width, height = p.get_width(), p.get_height()
-                x, y = p.get_xy() 
-                if height > 0:
-                    axes[0].annotate(f'{int(height):,}', (x + width/2, y + height/2), 
-                                     ha='center', va='center', color='white', fontweight='bold', fontsize=9)
-                                     
-            protocol_pct.plot(kind='bar', stacked=True, color=colors, ax=axes[1])
-            axes[1].set_title('Relative Traffic and Attack Percentages', color='#f8fafc', fontweight='bold')
-            axes[1].set_xlabel('Protocol', color='#94a3b8')
-            axes[1].set_ylabel('Percentage (%)', color='#94a3b8')
-            axes[1].set_xticklabels(protocol_pct.index, rotation=0)
-            axes[1].legend(title='Traffic Type', bbox_to_anchor=(1.02, 1), loc='upper left')
-            for p in axes[1].patches:
-                width, height = p.get_width(), p.get_height()
-                x, y = p.get_xy() 
-                if height > 0:
-                    axes[1].annotate(f'{height:.1f}%', (x + width/2, y + height/2), 
-                                     ha='center', va='center', color='white', fontweight='bold', fontsize=9)
-            st.pyplot(fig, use_container_width=True)
+            with col_rel:
+                fig_rel = px.bar(
+                    protocol_counts_melted, 
+                    x='protocol', 
+                    y='Percentage', 
+                    color='Attack Type',
+                    color_discrete_map=attack_colors,
+                    title="Relative Traffic and Attack Percentages",
+                    text_auto='.1f'
+                )
+                fig_rel.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#f8fafc',
+                    xaxis=dict(title="Protocol", tickfont=dict(color='#94a3b8')),
+                    yaxis=dict(title="Percentage (%)", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                    legend=dict(font=dict(color='#94a3b8'))
+                )
+                st.plotly_chart(fig_rel, use_container_width=True)
             
         elif eda_view == "6. Correlation Heatmap":
             st.write("#### Correlation Heatmap of Numerical Features")
             corr_matrix = df_raw[['duration', 'src_bytes', 'dst_bytes', 'packet_count', 'failed_logins']].corr()
-            fig, ax = plt.subplots(figsize=(8, 5))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5, ax=ax)
-            ax.tick_params(colors='#94a3b8')
-            ax.set_title('Correlation Heatmap', color='#f8fafc', fontweight='bold')
-            st.pyplot(fig, use_container_width=True)
+            
+            fig = px.imshow(
+                corr_matrix, 
+                text_auto='.2f', 
+                color_continuous_scale='RdBu_r', 
+                zmin=-1, 
+                zmax=1,
+                title="Correlation Heatmap"
+            )
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                xaxis=dict(tickfont=dict(color='#94a3b8')),
+                yaxis=dict(tickfont=dict(color='#94a3b8')),
+                coloraxis_colorbar=dict(tickfont=dict(color='#94a3b8'))
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
         elif eda_view == "7. Throughput by Attack Type":
             st.write("#### Throughput by Attack Type")
-            fig, ax = plt.subplots(figsize=(8, 5))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            ax.grid(True, color='#334155', linestyle='--')
+            df_grouped = df_raw.groupby('attack_type')['throughput'].mean().reset_index()
             
-            sns.barplot(data=df_raw, x='attack_type', y='throughput', palette='Set2', errorbar=None, ax=ax)
-            ax.set_yscale('log')
-            ax.set_ylabel("Average Throughput (Bytes/Second)", color='#94a3b8')
-            ax.set_xlabel("Attack Type", color='#94a3b8')
-            ax.tick_params(colors='#94a3b8')
-            ax.set_title('Throughput by Attack Type', color='#f8fafc', fontweight='bold')
-            for p in ax.patches:
-                height = p.get_height()
-                if height > 0:
-                    ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height * 1.15),
-                                ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig, use_container_width=True)
+            fig = px.bar(
+                    df_grouped,
+                    x='attack_type',
+                    y='throughput',
+                    color='attack_type',
+                    color_discrete_map=attack_colors,
+                    text_auto='.2f',
+                    title="Average Throughput by Attack Type"
+                )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                showlegend=False,
+                xaxis=dict(title="", tickfont=dict(color='#94a3b8')),
+                yaxis=dict(title="Throughput (Bytes/Second, Log Scale)", gridcolor='#1e293b', tickfont=dict(color='#94a3b8'), type='log')
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
         elif eda_view == "8. Average Packet Size by Attack Type":
             st.write("#### Average Packet Size by Attack Type")
-            fig, ax = plt.subplots(figsize=(8, 5))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            ax.grid(True, color='#334155', linestyle='--')
+            df_grouped = df_raw.groupby('attack_type')['bytes_per_packet'].mean().reset_index()
             
-            sns.barplot(data=df_raw, x='attack_type', y='bytes_per_packet', palette='Set2', errorbar=None, ax=ax)
-            ax.set_ylabel("Average Packet Size (Bytes/Packet)", color='#94a3b8')
-            ax.set_xlabel("Attack Type", color='#94a3b8')
-            ax.tick_params(colors='#94a3b8')
-            ax.set_title('Average Packet Size by Attack Type', color='#f8fafc', fontweight='bold')
-            for p in ax.patches:
-                height = p.get_height()
-                if height > 0:
-                    ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height + 1),
-                                ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig, use_container_width=True)
+            fig = px.bar(
+                df_grouped,
+                x='attack_type',
+                y='bytes_per_packet',
+                color='attack_type',
+                color_discrete_map=attack_colors,
+                text_auto='.2f',
+                title="Average Packet Size by Attack Type"
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                showlegend=False,
+                xaxis=dict(title="", tickfont=dict(color='#94a3b8')),
+                yaxis=dict(title="Packet Size (Bytes)", gridcolor='#1e293b', tickfont=dict(color='#94a3b8'))
+            )
+            st.plotly_chart(fig, use_container_width=True)
             
         else:
             st.write("#### Data Asymmetry Ratio by Attack Type")
-            fig, ax = plt.subplots(figsize=(10, 5))
-            fig.patch.set_facecolor('#1e293b')
-            ax.patch.set_facecolor('#1e293b')
-            ax.grid(True, color='#334155', linestyle='--')
+            df_grouped = df_raw.groupby('attack_type')['asymmetry_ratio'].mean().reset_index()
             
-            sns.barplot(data=df_raw, x='attack_type', y='asymmetry_ratio', palette='Set2', errorbar=None, ax=ax)
-            ax.set_ylabel("Average Asymmetry Ratio (Src / Total)", color='#94a3b8')
-            ax.set_xlabel("Attack Type", color='#94a3b8')
-            ax.tick_params(colors='#94a3b8')
-            ax.set_title('Data Asymmetry Ratio by Attack Type', color='#f8fafc', fontweight='bold')
-            for p in ax.patches:
-                height = p.get_height()
-                if height > 0:
-                    ax.annotate(f"{height:.2f}", (p.get_x() + p.get_width() / 2., height + 0.02),
-                                ha='center', va='bottom', color='#f8fafc', fontweight='bold', fontsize=9)
-            st.pyplot(fig, use_container_width=True)
+            fig = px.bar(
+                df_grouped,
+                x='attack_type',
+                y='asymmetry_ratio',
+                color='attack_type',
+                color_discrete_map=attack_colors,
+                text_auto='.2%',
+                title="Data Asymmetry Ratio by Attack Type"
+            )
+            
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font_color='#f8fafc',
+                showlegend=False,
+                xaxis=dict(title="", tickfont=dict(color='#94a3b8')),
+                yaxis=dict(title="Asymmetry Ratio (Src / Total)", gridcolor='#1e293b', tickfont=dict(color='#94a3b8'), range=[0, 1.1])
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     with tab_model:
         st.subheader("Model Training & Evaluation Results")
         
+        # Model Comparison Cards
+        st.markdown("""
+        <div style="display: flex; gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="flex: 1; text-align: center; margin-bottom: 0;">
+                <div style="font-size: 13px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Decision Tree Classifier</div>
+                <div style="font-size: 32px; font-weight: 800; color: #38bdf8; margin: 4px 0;">99.99%</div>
+                <div style="font-size: 12px; color: #64748b;">Testing Accuracy (20k Samples)</div>
+            </div>
+            <div class="card" style="flex: 1; text-align: center; margin-bottom: 0; border-color: #10b981; background-color: rgba(16, 185, 129, 0.02)">
+                <div style="font-size: 13px; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Random Forest Classifier</div>
+                <div style="font-size: 32px; font-weight: 800; color: #10b981; margin: 4px 0;">100.00%</div>
+                <div style="font-size: 12px; color: #64748b;">Testing Accuracy (20k Samples)</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         col_m1, col_m2 = st.columns(2)
         
         with col_m1:
-            st.write("#### Confusion Matrix Comparison")
+            st.write("#### Confusion Matrix")
             cm_path = os.path.join('img', 'Confusion Matrix of Classification Models.png')
             if os.path.exists(cm_path):
                 st.image(cm_path, use_container_width=True)
             else:
-                st.info("Confusion matrix plot not found. Run Chapter 5 code to generate and save it.")
+                st.info("Confusion matrix plot not found. Run Chapter 5 code in the notebook to generate and save it.")
                 
         with col_m2:
-            st.write("#### Feature Importance Comparison")
-            fi_path = os.path.join('img', 'Feature Importance Comparison.png')
-            if os.path.exists(fi_path):
-                st.image(fi_path, use_container_width=True)
+            st.write("#### Feature Importance (Dynamic)")
+            if hasattr(model, 'feature_importances_'):
+                importances = model.feature_importances_
+                feature_names = ['duration', 'src_bytes', 'dst_bytes', 'packet_count', 'protocol', 'failed_logins', 'throughput', 'bytes_per_packet', 'asymmetry_ratio']
+                clean_names = [f.replace('_', ' ').title() for f in feature_names]
+                
+                fi_df = pd.DataFrame({
+                    'Feature': clean_names,
+                    'Importance': importances
+                }).sort_values('Importance', ascending=True)
+                
+                fig_fi = px.bar(
+                    fi_df,
+                    y='Feature',
+                    x='Importance',
+                    orientation='h',
+                    title='Random Forest Classifier Feature Importance',
+                    color='Importance',
+                    color_continuous_scale='Blues'
+                )
+                fig_fi.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#f8fafc',
+                    coloraxis_showscale=False,
+                    xaxis=dict(title="Importance Score", gridcolor='#1e293b', tickfont=dict(color='#94a3b8')),
+                    yaxis=dict(title="", tickfont=dict(color='#94a3b8')),
+                    margin=dict(l=10, r=10, t=30, b=10)
+                )
+                st.plotly_chart(fig_fi, use_container_width=True)
             else:
-                st.info("Feature importance plot not found. Run Chapter 5 code to generate and save it.")
+                st.info("Feature importance plot cannot be dynamically generated from the loaded model.")
