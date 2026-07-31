@@ -143,7 +143,8 @@ def load_assets():
 
 @st.cache_data
 def load_dataset():
-    path = r"C:\Users\FATHIR\.cache\kagglehub\datasets\juanschafle\cyber-attack-detection-using-network-traffic\versions\1"
+    import kagglehub
+    path = kagglehub.dataset_download("juanschafle/cyber-attack-detection-using-network-traffic")
     csv_file = os.path.join(path, 'cyber_attack_dataset_100000.csv')
     df = pd.read_csv(csv_file)
     # Prevent division by zero for derived features
